@@ -3,13 +3,14 @@ extends Node2D
 
 const BallScript = preload("res://scripts/ball.gd")
 
-@export var max_strength: float = 2000.0
+@export var max_strength: float = 3200.0
 @export var fire_rate: float = 0.4
 
 var _power: float = 0.0
 var _can_fire: bool = true
 var _fire_timer: float = 0.0
 var _balls_container: Node2D
+var _touch_charging: bool = false
 
 const LAUNCH_DIR := Vector2(0.0, -1.0)
 const LAUNCHER_COLOR := Color(0.4, 0.4, 0.5)
@@ -18,6 +19,14 @@ const POWER_BAR_OFFSET_X: float = -28.0
 
 func setup(balls_container: Node2D) -> void:
 	_balls_container = balls_container
+
+
+func start_touch_charge() -> void:
+	_touch_charging = true
+
+
+func stop_touch_charge() -> void:
+	_touch_charging = false
 
 
 func _process(delta: float) -> void:
@@ -29,7 +38,7 @@ func _process(delta: float) -> void:
 		if _fire_timer <= 0.0:
 			_can_fire = true
 
-	if Input.is_action_pressed("launch"):
+	if Input.is_action_pressed("launch") or _touch_charging:
 		_power = minf(_power + delta * 3.0, 1.0)
 	elif _power > 0.05:
 		_fire()

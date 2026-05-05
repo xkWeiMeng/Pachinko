@@ -20,6 +20,7 @@ func _ready() -> void:
 
 	collision_layer = 1
 	collision_mask = 0b1111
+	linear_damp = 0.5  # Simulates channel friction + air drag
 
 	var mat := PhysicsMaterial.new()
 	mat.bounce = 0.8

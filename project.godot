@@ -22,6 +22,10 @@ EventBus="*res://autoloads/event_bus.gd"
 GameState="*res://autoloads/game_state.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
 
+[gui]
+
+theme/custom_font="res://resources/fonts/NotoSansJP-Bold.ttf"
+
 [display]
 
 window/size/viewport_width=540

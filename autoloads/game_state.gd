@@ -49,8 +49,7 @@ func add_balls(count: int) -> void:
 	balls_changed.emit(balls_remaining)
 
 
-func _on_ball_captured(is_crit: bool, _ball: RigidBody2D) -> void:
-	var reward := CRIT_CAPTURE_REWARD if is_crit else NORMAL_CAPTURE_REWARD
+func _on_ball_captured(reward: int, is_crit: bool, _ball: RigidBody2D) -> void:
 	add_balls(reward)
 	add_score(reward * 10)
 

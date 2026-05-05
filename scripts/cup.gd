@@ -4,17 +4,30 @@ extends Node2D
 @export var is_crit: bool = false
 @export var cup_width: float = 50.0
 @export var cup_depth: float = 35.0
+@export var reward_balls: int = 15
+@export var label_text: String = ""
 
 const NORMAL_COLOR := Color(0.12, 0.56, 1.0)
 const CRIT_COLOR := Color(1.0, 0.27, 0.0)
+const SMALL_COLOR := Color(0.3, 0.75, 0.5)
 
 var _glow: float = 0.0:
 	set(value):
 		_glow = value
 		queue_redraw()
 
+var _cup_color: Color = NORMAL_COLOR
+
 
 func _ready() -> void:
+	if is_crit:
+		_cup_color = CRIT_COLOR
+	elif reward_balls <= 10:
+		_cup_color = SMALL_COLOR
+	else:
+		_cup_color = NORMAL_COLOR
+	if label_text.is_empty():
+		label_text = "★" if is_crit else str(reward_balls)
 	_create_physics_walls()
 	_create_detection_area()
 
@@ -77,7 +90,8 @@ func _create_detection_area() -> void:
 
 func _on_ball_entered(body: Node2D) -> void:
 	if body.is_in_group("ball") and body.has_method("captured"):
-		body.captured(is_crit)
+		body.captured(is_crit, reward_balls)
+		AudioManager.play_capture()
 		if is_crit:
 			EventBus.spin_started.emit()
 		_play_capture_effect()
@@ -91,7 +105,7 @@ func _play_capture_effect() -> void:
 
 func _draw() -> void:
 	var hw := cup_width / 2.0
-	var color := CRIT_COLOR if is_crit else NORMAL_COLOR
+	var color := _cup_color
 
 	# Glow
 	if _glow > 0.0:
@@ -102,14 +116,14 @@ func _draw() -> void:
 
 	# Cup shape (U-shape)
 	var points := PackedVector2Array([
-		Vector2(-hw - 6, -2),
-		Vector2(-hw - 6, cup_depth),
-		Vector2(-hw, cup_depth + 6),
-		Vector2(hw, cup_depth + 6),
-		Vector2(hw + 6, cup_depth),
-		Vector2(hw + 6, -2),
+		Vector2(-hw - 4, -2),
+		Vector2(-hw - 4, cup_depth),
+		Vector2(-hw, cup_depth + 4),
+		Vector2(hw, cup_depth + 4),
+		Vector2(hw + 4, cup_depth),
+		Vector2(hw + 4, -2),
 	])
-	draw_polyline(points, color, 3.0, true)
+	draw_polyline(points, color, 2.5, true)
 
 	# Fill
 	var fill_points := PackedVector2Array([
@@ -118,11 +132,14 @@ func _draw() -> void:
 		Vector2(hw, cup_depth),
 		Vector2(hw, 0),
 	])
-	draw_colored_polygon(fill_points, Color(color.r, color.g, color.b, 0.15))
+	draw_colored_polygon(fill_points, Color(color.r, color.g, color.b, 0.12))
 
-	# Label
-	if is_crit:
-		draw_string(
-			ThemeDB.fallback_font, Vector2(-10, cup_depth + 22),
-			"★", HORIZONTAL_ALIGNMENT_CENTER, -1, 16, Color(1.0, 0.85, 0.0)
-		)
+	# Reward label
+	var font := ThemeDB.fallback_font
+	var font_size := 11 if label_text.length() > 2 else 14
+	var text_width := font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size).x
+	draw_string(
+		font, Vector2(-text_width / 2.0, cup_depth + 18),
+		label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size,
+		Color(0.9, 0.85, 0.3) if is_crit else Color(0.7, 0.7, 0.8)
+	)

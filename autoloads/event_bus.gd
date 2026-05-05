@@ -2,11 +2,14 @@ extends Node
 
 # Ball events
 signal ball_launched(ball: RigidBody2D)
-signal ball_captured(is_crit: bool, ball: RigidBody2D)
+signal ball_captured(reward: int, is_crit: bool, ball: RigidBody2D)
 signal ball_lost(ball: RigidBody2D)
 
 # Peg events
 signal peg_hit(peg: StaticBody2D, ball: RigidBody2D)
+
+# Tulip events
+signal tulip_triggered
 
 # Slots events
 signal spin_started

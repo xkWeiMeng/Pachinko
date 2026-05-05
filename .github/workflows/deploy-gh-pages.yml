@@ -1,0 +1,83 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  export-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot
+        env:
+          GODOT_VERSION: "4.6"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wget unzip
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+
+      - name: Import project
+        run: |
+          godot --headless --import 2>&1 || true
+          sleep 2
+
+      - name: Export Web build
+        run: |
+          mkdir -p build/web
+          godot --headless --export-release "Web" build/web/index.html
+
+      - name: Add coi-serviceworker for SharedArrayBuffer
+        run: |
+          cat > build/web/coi-serviceworker.js << 'COSW'
+          /*! coi-serviceworker v0.1.7 - Guido Zuidhof, MIT License */
+          if(!isSecureContext){if(location.protocol!=="file:"){location.protocol="https:"}}
+          if(typeof window==="undefined"){self.addEventListener("install",()=>self.skipWaiting());
+          self.addEventListener("activate",(e)=>e.waitUntil(self.clients.claim()));
+          self.addEventListener("fetch",(e)=>{if(e.request.cache==="only-if-cached"&&e.request.mode!=="same-origin")return;
+          e.respondWith(fetch(e.request).then((r)=>{if(r.status===0)return r;
+          const h=new Headers(r.headers);h.set("Cross-Origin-Embedder-Policy","require-corp");
+          h.set("Cross-Origin-Opener-Policy","same-origin");
+          return new Response(r.body,{status:r.status,statusText:r.statusText,headers:h})}))});}
+          else{const r=window.navigator;if(r.serviceWorker){
+          if(!r.serviceWorker.controller){r.serviceWorker.register(window.document.currentScript.src).then(
+          (reg)=>{console.log("COOP/COEP SW registered",reg.scope);
+          reg.addEventListener("updatefound",()=>{if(reg.installing){reg.installing.addEventListener("statechange",
+          function(){if(this.state==="activated")window.location.reload();})}});
+          if(reg.active&&!r.serviceWorker.controller){window.location.reload();}},
+          (err)=>console.error("COOP/COEP SW failed",err));}}}
+          COSW
+          # Inject service worker script into index.html
+          sed -i 's|</head>|<script src="coi-serviceworker.js"></script></head>|' build/web/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

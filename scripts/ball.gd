@@ -46,7 +46,7 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	_trail_positions.push_front(global_position)
 	if _trail_positions.size() > TRAIL_LENGTH:
 		_trail_positions.resize(TRAIL_LENGTH)
@@ -54,12 +54,12 @@ func _physics_process(_delta: float) -> void:
 		# Near-cup slowdown from sticky_shell relic
 		var slowdown: float = RelicManager.get_modifier("near_cup_slowdown", 0.0)
 		if slowdown > 0.0 and global_position.y > 700.0:
-			linear_velocity *= (1.0 - slowdown * _delta * 2.0)
+			linear_velocity *= (1.0 - slowdown * delta * 2.0)
 		# Wind force from elite modifier
 		if is_instance_valid(GameState):
 			var wind: float = GameState.wind_force
 			if wind != 0.0:
-				linear_velocity.x += wind * _delta
+				linear_velocity.x += wind * delta
 	queue_redraw()
 
 

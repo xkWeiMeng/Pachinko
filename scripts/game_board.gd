@@ -18,6 +18,10 @@ const MainMenuScript = preload("res://scripts/main_menu.gd")
 const AboutScreenScript = preload("res://scripts/about_screen.gd")
 const BottomBarScript = preload("res://scripts/bottom_bar.gd")
 const BoardFrameScript = preload("res://scripts/board_frame.gd")
+const MapScreenScript = preload("res://scripts/roguelike/map_screen.gd")
+const RelicSelectionScript = preload("res://scripts/roguelike/relic_selection_screen.gd")
+const RunSummaryScript = preload("res://scripts/roguelike/run_summary_screen.gd")
+const FloorObjectiveScript = preload("res://scripts/roguelike/floor_objective.gd")
 
 const BOARD_W: float = 540.0
 const BOARD_H: float = 960.0
@@ -54,6 +58,16 @@ var _bottom_bar: CanvasLayer
 var _current_board_idx: int = 0
 var _board_states: Array = []
 var _board_configs: Array = []
+
+# Roguelike mode state
+var roguelike_mode: bool = false
+var roguelike_config: Dictionary = {}
+var floor_objective: RefCounted = null
+var _map_screen: CanvasLayer = null
+var _relic_screen: CanvasLayer = null
+var _summary_screen: CanvasLayer = null
+var _floor_cleared_overlay: CanvasLayer = null
+var _objective_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -156,6 +170,17 @@ func _init_board_configs() -> void:
 func _process(_delta: float) -> void:
 	if GameState.current_phase != GameState.Phase.PLAYING:
 		return
+	# Roguelike: update survival objective timer
+	if roguelike_mode and floor_objective and not floor_objective.completed:
+		if floor_objective.type == FloorObjectiveScript.Type.SURVIVAL:
+			_objective_timer += _delta
+			floor_objective.update("time", floori(_objective_timer))
+			EventBus.floor_objective_updated.emit(
+				floor_objective.current_value,
+				floor_objective.target_value,
+				floor_objective.get_description(),
+			)
+		return  # No board switching in roguelike mode
 	if Input.is_action_just_pressed("ui_left"):
 		_switch_board(-1)
 	elif Input.is_action_just_pressed("ui_right"):
@@ -172,6 +197,7 @@ func _show_main_menu() -> void:
 	_main_menu = MainMenuScript.new()
 	_main_menu.start_game_requested.connect(_on_menu_start)
 	_main_menu.about_requested.connect(_on_menu_about)
+	_main_menu.roguelike_requested.connect(_on_menu_roguelike)
 	add_child(_main_menu)
 
 
@@ -197,6 +223,203 @@ func _on_about_back() -> void:
 	_show_main_menu()
 
 
+func _on_menu_roguelike() -> void:
+	_main_menu.queue_free()
+	_main_menu = null
+	roguelike_mode = true
+	GameState.roguelike_mode = true
+	RunManager.start_run()
+	RunManager.phase_changed.connect(_on_run_phase_changed)
+	RunManager.run_ended.connect(_on_run_ended)
+	RunManager.floor_started.connect(_on_run_floor_started)
+	_show_map_screen()
+
+
+func _show_map_screen() -> void:
+	_map_screen = MapScreenScript.new()
+	_map_screen.setup(
+		RunManager.run_map,
+		RunManager.current_layer_idx,
+		RunManager.ball_pool,
+		RunManager.run_score,
+		RunManager.current_act,
+	)
+	_map_screen.node_selected.connect(_on_map_node_selected)
+	add_child(_map_screen)
+
+
+func _on_map_node_selected(layer_idx: int, node_idx: int) -> void:
+	EventBus.map_node_selected.emit(layer_idx, node_idx)
+	RunManager.select_map_node(layer_idx, node_idx)
+
+
+func _on_run_phase_changed(new_phase: int) -> void:
+	match new_phase:
+		RunManager.RunPhase.MAP_SELECT:
+			_show_map_screen()
+		RunManager.RunPhase.RELIC_SELECT:
+			_show_relic_selection()
+		RunManager.RunPhase.REST, RunManager.RunPhase.SHOP, RunManager.RunPhase.EVENT:
+			# For non-combat nodes, show briefly and advance
+			RunManager.skip_non_combat_node()
+
+
+func _on_run_ended(won: bool, stats: Dictionary) -> void:
+	_summary_screen = RunSummaryScript.new()
+	_summary_screen.setup(won, stats)
+	_summary_screen.continue_pressed.connect(_on_summary_continue)
+	add_child(_summary_screen)
+
+
+func _on_summary_continue() -> void:
+	roguelike_mode = false
+	GameState.roguelike_mode = false
+	if RunManager.phase_changed.is_connected(_on_run_phase_changed):
+		RunManager.phase_changed.disconnect(_on_run_phase_changed)
+	if RunManager.run_ended.is_connected(_on_run_ended):
+		RunManager.run_ended.disconnect(_on_run_ended)
+	if RunManager.floor_started.is_connected(_on_run_floor_started):
+		RunManager.floor_started.disconnect(_on_run_floor_started)
+	get_tree().reload_current_scene()
+
+
+func _on_run_floor_started(floor_num: int, config: Dictionary) -> void:
+	var objective: RefCounted = RunManager.get_current_objective()
+	_objective_timer = 0.0
+	setup_roguelike_floor(config, objective)
+
+
+func setup_roguelike_floor(config: Dictionary, objective: RefCounted) -> void:
+	roguelike_config = config
+	floor_objective = objective
+
+	# Tear down existing physics and rebuild with roguelike config
+	_tear_down_physics()
+	_build_physics_world()
+	_reconnect_bar_launcher()
+
+	# Start floor in GameState
+	GameState.start_floor(RunManager.ball_pool, RunManager.ball_cap)
+
+	# Setup HUD for roguelike
+	if _hud:
+		_hud.setup_roguelike(
+			RunManager.current_floor,
+			RunManager.current_act,
+			floor_objective.get_description(),
+		)
+
+	# Create bottom bar if needed (roguelike mode: no board switching)
+	if not _bottom_bar:
+		_create_bottom_bar()
+
+	# Connect objective signals
+	if floor_objective:
+		floor_objective.objective_completed.connect(_on_floor_objective_completed)
+
+	# Connect game events to objective tracking
+	if not EventBus.ball_captured.is_connected(_on_roguelike_capture):
+		EventBus.ball_captured.connect(_on_roguelike_capture)
+	if not EventBus.ball_lost.is_connected(_on_roguelike_ball_lost):
+		EventBus.ball_lost.connect(_on_roguelike_ball_lost)
+	if not GameState.game_over.is_connected(_on_roguelike_game_over):
+		GameState.game_over.connect(_on_roguelike_game_over)
+
+
+func _on_roguelike_capture(reward: int, is_crit: bool, ball: RigidBody2D) -> void:
+	if not roguelike_mode or floor_objective == null:
+		return
+	floor_objective.update("capture", 1)
+	floor_objective.update("score", reward * 10)
+	if floor_objective.type == FloorObjectiveScript.Type.TARGET_SCORE:
+		EventBus.floor_objective_updated.emit(
+			floor_objective.current_value,
+			floor_objective.target_value,
+			floor_objective.get_description(),
+		)
+	elif floor_objective.type == FloorObjectiveScript.Type.CAPTURES:
+		EventBus.floor_objective_updated.emit(
+			floor_objective.current_value,
+			floor_objective.target_value,
+			floor_objective.get_description(),
+		)
+
+
+func _on_roguelike_ball_lost(_ball: RigidBody2D) -> void:
+	pass
+
+
+func _on_roguelike_game_over() -> void:
+	if roguelike_mode:
+		RunManager.end_run(false)
+
+
+func _on_floor_objective_completed() -> void:
+	_show_floor_cleared_overlay()
+
+
+func _show_floor_cleared_overlay() -> void:
+	_floor_cleared_overlay = CanvasLayer.new()
+	_floor_cleared_overlay.layer = 15
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.0, 0.0, 0.0, 0.5)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_floor_cleared_overlay.add_child(bg)
+
+	var label := Label.new()
+	label.text = "★ FLOOR CLEARED ★"
+	label.add_theme_font_size_override("font_size", 32)
+	label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size = Vector2(540, 50)
+	label.position = Vector2(0, 400)
+	_floor_cleared_overlay.add_child(label)
+
+	add_child(_floor_cleared_overlay)
+
+	# Auto-advance after delay
+	var timer := get_tree().create_timer(2.0)
+	timer.timeout.connect(_on_floor_cleared_timer)
+
+
+func _on_floor_cleared_timer() -> void:
+	if _floor_cleared_overlay:
+		_floor_cleared_overlay.queue_free()
+		_floor_cleared_overlay = null
+
+	# Disconnect roguelike event handlers
+	if EventBus.ball_captured.is_connected(_on_roguelike_capture):
+		EventBus.ball_captured.disconnect(_on_roguelike_capture)
+	if EventBus.ball_lost.is_connected(_on_roguelike_ball_lost):
+		EventBus.ball_lost.disconnect(_on_roguelike_ball_lost)
+	if GameState.game_over.is_connected(_on_roguelike_game_over):
+		GameState.game_over.disconnect(_on_roguelike_game_over)
+
+	RunManager.complete_floor()
+
+
+func _show_relic_selection() -> void:
+	var relics := RelicManager.get_random_relics(3)
+	if relics.is_empty():
+		RunManager.on_relic_skipped()
+		return
+
+	_relic_screen = RelicSelectionScript.new()
+	_relic_screen.setup(relics)
+	_relic_screen.relic_selected.connect(_on_relic_picked)
+	_relic_screen.selection_skipped.connect(_on_relic_skip)
+	add_child(_relic_screen)
+
+
+func _on_relic_picked(relic_id: String) -> void:
+	RunManager.on_relic_selected(relic_id)
+
+
+func _on_relic_skip() -> void:
+	RunManager.on_relic_skipped()
+
+
 func _create_bottom_bar() -> void:
 	_bottom_bar = BottomBarScript.new()
 	_bottom_bar.board_count = BOARD_COUNT
@@ -205,7 +428,10 @@ func _create_bottom_bar() -> void:
 	_bottom_bar.launch_hold_started.connect(_launcher.start_touch_charge)
 	_bottom_bar.launch_hold_ended.connect(_launcher.stop_touch_charge)
 	add_child(_bottom_bar)
-	_bottom_bar.set_board_info(_current_board_idx, _board_configs[_current_board_idx]["name"])
+	if roguelike_mode and not roguelike_config.is_empty():
+		_bottom_bar.set_board_info(0, roguelike_config.get("name", "ROGUELIKE"))
+	else:
+		_bottom_bar.set_board_info(_current_board_idx, _board_configs[_current_board_idx]["name"])
 
 
 func _on_bar_back() -> void:
@@ -271,7 +497,11 @@ func _build_background() -> void:
 
 
 func _build_physics_world() -> void:
-	var cfg: Dictionary = _board_configs[_current_board_idx]
+	var cfg: Dictionary
+	if roguelike_mode and not roguelike_config.is_empty():
+		cfg = roguelike_config
+	else:
+		cfg = _board_configs[_current_board_idx]
 	_physics_world = Node2D.new()
 	_physics_world.name = "PhysicsWorld"
 	add_child(_physics_world)

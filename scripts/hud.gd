@@ -9,6 +9,18 @@ var final_score_label: Label
 var jackpot_label: Label
 var jackpot_tween: Tween
 
+# Roguelike HUD elements
+var roguelike_mode: bool = false
+var _floor_info_label: Label
+var _objective_label: Label
+var _objective_bar_bg: ColorRect
+var _objective_bar_fill: ColorRect
+var _relic_strip_label: Label
+var _combo_label: Label
+var _combo_tween: Tween
+var _low_balls_overlay: ColorRect
+var _low_balls_tween: Tween
+
 const LABEL_COLOR := Color(0.85, 0.85, 0.9)
 const ACCENT_COLOR := Color(0.9, 0.85, 0.3)
 
@@ -19,6 +31,9 @@ func _ready() -> void:
 	GameState.balls_changed.connect(_on_balls_changed)
 	GameState.game_over.connect(_on_game_over)
 	EventBus.jackpot_hit.connect(_on_jackpot)
+	EventBus.floor_objective_updated.connect(_on_objective_updated)
+	EventBus.combo_updated.connect(_on_combo_updated)
+	EventBus.relic_acquired.connect(_on_relic_acquired)
 	_update_display()
 
 
@@ -54,8 +69,84 @@ func _build_ui() -> void:
 	jackpot_label.visible = false
 	add_child(jackpot_label)
 
+	# Roguelike: Floor info (top-right)
+	_floor_info_label = Label.new()
+	_floor_info_label.add_theme_font_size_override("font_size", 14)
+	_floor_info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	_floor_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_floor_info_label.size = Vector2(200, 20)
+	_floor_info_label.position = Vector2(320, 20)
+	_floor_info_label.visible = false
+	add_child(_floor_info_label)
+
+	# Roguelike: Objective progress bar
+	_objective_bar_bg = ColorRect.new()
+	_objective_bar_bg.color = Color(0.15, 0.15, 0.2)
+	_objective_bar_bg.size = Vector2(200, 12)
+	_objective_bar_bg.position = Vector2(320, 42)
+	_objective_bar_bg.visible = false
+	add_child(_objective_bar_bg)
+
+	_objective_bar_fill = ColorRect.new()
+	_objective_bar_fill.color = Color(0.3, 0.8, 0.4)
+	_objective_bar_fill.size = Vector2(0, 12)
+	_objective_bar_fill.position = Vector2(320, 42)
+	_objective_bar_fill.visible = false
+	add_child(_objective_bar_fill)
+
+	# Roguelike: Objective text
+	_objective_label = Label.new()
+	_objective_label.add_theme_font_size_override("font_size", 11)
+	_objective_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6))
+	_objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_objective_label.size = Vector2(200, 18)
+	_objective_label.position = Vector2(320, 56)
+	_objective_label.visible = false
+	add_child(_objective_label)
+
+	# Roguelike: Relic icon strip (bottom area)
+	_relic_strip_label = Label.new()
+	_relic_strip_label.add_theme_font_size_override("font_size", 16)
+	_relic_strip_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	_relic_strip_label.position = Vector2(15, 870)
+	_relic_strip_label.size = Vector2(400, 25)
+	_relic_strip_label.visible = false
+	add_child(_relic_strip_label)
+
+	# Roguelike: Combo counter (center)
+	_combo_label = Label.new()
+	_combo_label.add_theme_font_size_override("font_size", 40)
+	_combo_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.1))
+	_combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combo_label.size = Vector2(540, 55)
+	_combo_label.position = Vector2(0, 170)
+	_combo_label.visible = false
+	add_child(_combo_label)
+
+	# Roguelike: Low balls warning overlay
+	_low_balls_overlay = ColorRect.new()
+	_low_balls_overlay.color = Color(1.0, 0.1, 0.1, 0.0)
+	_low_balls_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_low_balls_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_low_balls_overlay.visible = false
+	add_child(_low_balls_overlay)
+
 	# Game Over panel
 	_build_game_over_panel()
+
+
+func setup_roguelike(floor_num: int, act: int, objective_desc: String) -> void:
+	roguelike_mode = true
+	_floor_info_label.text = "Act %d - Floor %d" % [act, floor_num]
+	_floor_info_label.visible = true
+	_objective_label.text = objective_desc
+	_objective_label.visible = true
+	_objective_bar_bg.visible = true
+	_objective_bar_fill.visible = true
+	_objective_bar_fill.size.x = 0
+	_relic_strip_label.visible = true
+	_update_relic_strip()
+	high_score_label.visible = false
 
 
 func _build_game_over_panel() -> void:
@@ -122,6 +213,17 @@ func _on_score_changed(new_score: int) -> void:
 
 func _on_balls_changed(remaining: int) -> void:
 	balls_label.text = "BALLS  %04d" % maxi(remaining, 0)
+	# Low balls warning in roguelike mode
+	if roguelike_mode and remaining < 10 and remaining > 0:
+		_low_balls_overlay.visible = true
+		if _low_balls_tween:
+			_low_balls_tween.kill()
+		_low_balls_tween = create_tween().set_loops(3)
+		_low_balls_tween.tween_property(_low_balls_overlay, "color:a", 0.08, 0.3)
+		_low_balls_tween.tween_property(_low_balls_overlay, "color:a", 0.0, 0.3)
+		_low_balls_tween.finished.connect(func(): _low_balls_overlay.visible = false)
+	elif remaining >= 10 or remaining <= 0:
+		_low_balls_overlay.visible = false
 
 
 func _on_game_over() -> void:
@@ -143,3 +245,47 @@ func _on_jackpot() -> void:
 func _on_restart_pressed() -> void:
 	game_over_panel.visible = false
 	get_tree().reload_current_scene()
+
+
+func _on_objective_updated(current: int, target: int, desc: String) -> void:
+	if not roguelike_mode:
+		return
+	if target > 0:
+		var progress := clampf(float(current) / float(target), 0.0, 1.0)
+		_objective_bar_fill.size.x = 200.0 * progress
+		_objective_label.text = "%s  %d/%d" % [desc, current, target]
+
+
+func _on_combo_updated(count: int) -> void:
+	if not roguelike_mode:
+		return
+	if count >= 2:
+		_combo_label.text = "COMBO x%d" % count
+		_combo_label.visible = true
+		if _combo_tween:
+			_combo_tween.kill()
+		_combo_tween = create_tween()
+		_combo_label.scale = Vector2(1.3, 1.3)
+		_combo_tween.tween_property(_combo_label, "scale", Vector2(1.0, 1.0), 0.15)
+		_combo_tween.tween_interval(1.5)
+		_combo_tween.tween_property(_combo_label, "modulate:a", 0.0, 0.3)
+		_combo_tween.finished.connect(func():
+			_combo_label.visible = false
+			_combo_label.modulate.a = 1.0
+		)
+	else:
+		_combo_label.visible = false
+
+
+func _on_relic_acquired(_relic: Dictionary) -> void:
+	if roguelike_mode:
+		_update_relic_strip()
+
+
+func _update_relic_strip() -> void:
+	if not is_instance_valid(RelicManager):
+		return
+	var icons := ""
+	for relic in RelicManager.active_relics:
+		icons += relic.get("icon_char", "?") + " "
+	_relic_strip_label.text = icons.strip_edges()

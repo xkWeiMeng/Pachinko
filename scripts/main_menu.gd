@@ -3,12 +3,13 @@ extends CanvasLayer
 
 signal start_game_requested
 signal about_requested
+signal roguelike_requested
 
 const BOARD_W := 540.0
 const SELECTED_COLOR := Color(1.0, 0.85, 0.2)
 const NORMAL_COLOR := Color(0.5, 0.5, 0.6)
 const GOLD_DIM := Color(0.6, 0.55, 0.2)
-const ITEMS := ["START  GAME", "ABOUT"]
+const ITEMS := ["ROGUELIKE", "CLASSIC", "ABOUT"]
 const MENU_Y := 450.0
 const ITEM_GAP := 55.0
 const DOT_COUNT := 25
@@ -163,5 +164,6 @@ func _refresh() -> void:
 
 func _confirm() -> void:
 	match _selected:
-		0: start_game_requested.emit()
-		1: about_requested.emit()
+		0: roguelike_requested.emit()
+		1: start_game_requested.emit()
+		2: about_requested.emit()

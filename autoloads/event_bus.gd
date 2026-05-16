@@ -19,3 +19,14 @@ signal jackpot_hit
 signal score_changed(new_score: int)
 signal balls_changed(remaining: int)
 signal game_over
+
+# Roguelike events
+signal run_started
+signal floor_started(floor_num: int, config: Dictionary)
+signal floor_cleared(floor_num: int)
+signal floor_objective_updated(current: int, target: int, desc: String)
+signal run_ended(won: bool, stats: Dictionary)
+signal relic_acquired(relic: Dictionary)
+signal relic_removed(relic: Dictionary)
+signal combo_updated(count: int)
+signal map_node_selected(layer_idx: int, node_idx: int)

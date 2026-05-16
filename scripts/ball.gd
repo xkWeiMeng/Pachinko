@@ -24,6 +24,10 @@ func _ready() -> void:
 
 	var mat := PhysicsMaterial.new()
 	mat.bounce = 0.8
+	# Apply bounce_bonus relic modifier
+	if is_instance_valid(RelicManager):
+		var bounce_bonus: float = RelicManager.get_modifier("bounce_bonus", 0.0)
+		mat.bounce = clampf(mat.bounce + bounce_bonus, 0.0, 1.0)
 	mat.friction = 0.1
 	physics_material_override = mat
 
@@ -40,6 +44,11 @@ func _physics_process(_delta: float) -> void:
 	_trail_positions.push_front(global_position)
 	if _trail_positions.size() > TRAIL_LENGTH:
 		_trail_positions.resize(TRAIL_LENGTH)
+	# Near-cup slowdown from sticky_shell relic
+	if is_instance_valid(RelicManager):
+		var slowdown: float = RelicManager.get_modifier("near_cup_slowdown", 0.0)
+		if slowdown > 0.0 and global_position.y > 700.0:
+			linear_velocity *= (1.0 - slowdown * _delta * 2.0)
 	queue_redraw()
 
 

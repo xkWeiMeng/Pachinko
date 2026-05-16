@@ -105,18 +105,23 @@ func _set_open_angles() -> void:
 
 
 func open() -> void:
+	var duration_mult := 1.0
+	if is_instance_valid(RelicManager):
+		duration_mult = RelicManager.get_modifier("tulip_duration_mult", 1.0)
+	var effective_duration := OPEN_DURATION * duration_mult
+
 	if _state == State.OPEN:
 		# Reset timer if already open
 		if _open_timer and _open_timer.time_left > 0:
 			_open_timer.timeout.disconnect(_close)
-		_open_timer = get_tree().create_timer(OPEN_DURATION)
+		_open_timer = get_tree().create_timer(effective_duration)
 		_open_timer.timeout.connect(_close)
 		return
 
 	_state = State.OPEN
 	_animate_to_open()
 
-	_open_timer = get_tree().create_timer(OPEN_DURATION)
+	_open_timer = get_tree().create_timer(effective_duration)
 	_open_timer.timeout.connect(_close)
 
 

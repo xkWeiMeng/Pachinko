@@ -37,7 +37,7 @@ func _build_ui() -> void:
 
 	# Subtitle
 	var sub := Label.new()
-	sub.text = "P A C H I N K O"
+	sub.text = "P A C H I N K O   R O G U E"
 	sub.add_theme_font_size_override("font_size", 18)
 	sub.add_theme_color_override("font_color", Color(0.6, 0.55, 0.2))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

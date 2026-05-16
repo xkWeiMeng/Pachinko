@@ -28,6 +28,9 @@ func _ready() -> void:
 		_cup_color = NORMAL_COLOR
 	if label_text.is_empty():
 		label_text = "★" if is_crit else str(reward_balls)
+	# Apply relic width modifier
+	if is_instance_valid(RelicManager):
+		cup_width *= RelicManager.get_modifier("cup_width_mult", 1.0)
 	_create_physics_walls()
 	_create_detection_area()
 

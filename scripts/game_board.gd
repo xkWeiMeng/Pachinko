@@ -330,7 +330,22 @@ func _on_summary_continue() -> void:
 func _on_run_floor_started(floor_num: int, config: Dictionary) -> void:
 	var objective: RefCounted = RunManager.get_current_objective()
 	_objective_timer = 0.0
-	setup_roguelike_floor(config, objective)
+	_play_floor_transition(floor_num, func():
+		setup_roguelike_floor(config, objective)
+	)
+
+
+func _play_floor_transition(floor_num: int, on_complete: Callable) -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0.0, 0.0, 0.0, 0.0)
+	overlay.size = Vector2(BOARD_W, BOARD_H)
+	overlay.z_index = 100
+	add_child(overlay)
+	var tween := create_tween()
+	tween.tween_property(overlay, "color:a", 1.0, 0.15)
+	tween.tween_callback(on_complete)
+	tween.tween_property(overlay, "color:a", 0.0, 0.15)
+	tween.tween_callback(overlay.queue_free)
 
 
 func setup_roguelike_floor(config: Dictionary, objective: RefCounted) -> void:
@@ -447,7 +462,7 @@ func _show_floor_cleared_overlay() -> void:
 	_floor_cleared_overlay.add_child(label)
 
 	add_child(_floor_cleared_overlay)
-
+	AudioManager.play_floor_clear()
 	# Auto-advance after delay
 	var timer := get_tree().create_timer(2.0)
 	timer.timeout.connect(_on_floor_cleared_timer)
@@ -781,6 +796,7 @@ func _on_jackpot_effects() -> void:
 # ─── Boss Mechanics ───
 
 func _setup_boss_mechanics() -> void:
+	AudioManager.play_boss_appear()
 	match _boss_type:
 		"gatekeeper":
 			_setup_gatekeeper()

@@ -21,6 +21,8 @@ var _combo_tween: Tween
 var _low_balls_overlay: ColorRect
 var _low_balls_tween: Tween
 var _modifier_label: Label
+var _floor_title_label: Label
+var _floor_title_tween: Tween
 
 const LABEL_COLOR := Color(0.85, 0.85, 0.9)
 const ACCENT_COLOR := Color(0.9, 0.85, 0.3)
@@ -141,6 +143,17 @@ func _build_ui() -> void:
 	_modifier_label.visible = false
 	add_child(_modifier_label)
 
+	# Roguelike: Floor title announcement
+	_floor_title_label = Label.new()
+	_floor_title_label.add_theme_font_size_override("font_size", 48)
+	_floor_title_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	_floor_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_floor_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_floor_title_label.size = Vector2(540, 80)
+	_floor_title_label.position = Vector2(0, 440)
+	_floor_title_label.visible = false
+	add_child(_floor_title_label)
+
 	# Game Over panel
 	_build_game_over_panel()
 
@@ -157,6 +170,24 @@ func setup_roguelike(floor_num: int, act: int, objective_desc: String) -> void:
 	_relic_strip_label.visible = true
 	_update_relic_strip()
 	high_score_label.visible = false
+	_show_floor_title(floor_num)
+
+
+func _show_floor_title(floor_num: int) -> void:
+	_floor_title_label.text = "FLOOR %d" % floor_num
+	_floor_title_label.modulate.a = 1.0
+	_floor_title_label.visible = true
+	_floor_title_label.scale = Vector2(1.2, 1.2)
+	if _floor_title_tween:
+		_floor_title_tween.kill()
+	_floor_title_tween = create_tween()
+	_floor_title_tween.tween_property(_floor_title_label, "scale", Vector2(1.0, 1.0), 0.2)
+	_floor_title_tween.tween_interval(1.0)
+	_floor_title_tween.tween_property(_floor_title_label, "modulate:a", 0.0, 0.3)
+	_floor_title_tween.finished.connect(func():
+		_floor_title_label.visible = false
+		_floor_title_label.modulate.a = 1.0
+	)
 
 
 func _build_game_over_panel() -> void:
@@ -270,6 +301,7 @@ func _on_combo_updated(count: int) -> void:
 	if not roguelike_mode:
 		return
 	if count >= 2:
+		AudioManager.play_combo(count)
 		_combo_label.text = "COMBO x%d" % count
 		_combo_label.visible = true
 		if _combo_tween:

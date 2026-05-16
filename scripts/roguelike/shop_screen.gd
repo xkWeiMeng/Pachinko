@@ -34,13 +34,13 @@ func _enable_input() -> void:
 
 func _init_items() -> void:
 	_items = [
-		{"name": "Small Ball Pack", "price": 200, "desc": "+10 balls", "type": "balls", "value": 10},
+		{"name": "Small Ball Pack", "price": 150, "desc": "+10 balls", "type": "balls", "value": 10},
 		{"name": "Large Ball Pack", "price": 500, "desc": "+30 balls", "type": "balls", "value": 30},
-		{"name": "Random Common Relic", "price": 300, "desc": "Get 1 random common relic", "type": "relic_random", "rarity": 0},
+		{"name": "Random Common Relic", "price": 250, "desc": "Get 1 random common relic", "type": "relic_random", "rarity": 0},
 		{"name": "Random Rare Relic", "price": 800, "desc": "Get 1 random rare relic", "type": "relic_random", "rarity": 1},
 		{"name": "Relic Choice", "price": 1200, "desc": "3-pick-1 from any rarity", "type": "relic_choice"},
 		{"name": "Remove a Relic", "price": 400, "desc": "Remove 1 relic from inventory", "type": "relic_remove"},
-		{"name": "Ball Cap Upgrade", "price": 1500, "desc": "Ball cap +20 permanent", "type": "ball_cap", "value": 20},
+		{"name": "Ball Cap Upgrade", "price": 1000, "desc": "Ball cap +20 permanent", "type": "ball_cap", "value": 20},
 		{"name": "LEAVE", "price": 0, "desc": "", "type": "leave"},
 	]
 
@@ -198,6 +198,7 @@ func _purchase() -> void:
 			RunManager.run_score -= item["price"]
 			RunManager.ball_pool = mini(RunManager.ball_pool + item["value"], RunManager.ball_cap)
 			_show_message("+%d balls!" % item["value"])
+			AudioManager.play_shop_purchase()
 		"relic_random":
 			var rarity: int = item["rarity"]
 			var relics := RelicManager.get_relics_by_rarity(rarity)
@@ -210,8 +211,10 @@ func _purchase() -> void:
 			RelicManager.add_relic(relic["id"])
 			RunManager.collected_relics.append(relic["id"])
 			_show_message("Got: %s %s" % [relic["icon_char"], relic["name"]])
+			AudioManager.play_shop_purchase()
 		"relic_choice":
 			RunManager.run_score -= item["price"]
+			AudioManager.play_shop_purchase()
 			_show_relic_choice()
 			return  # Don't update info yet
 		"relic_remove":
@@ -223,10 +226,12 @@ func _purchase() -> void:
 			RelicManager.remove_relic(removed["id"])
 			RunManager.collected_relics.erase(removed["id"])
 			_show_message("Removed: %s %s" % [removed["icon_char"], removed["name"]])
+			AudioManager.play_shop_purchase()
 		"ball_cap":
 			RunManager.run_score -= item["price"]
 			RunManager.ball_cap += item["value"]
 			_show_message("Ball cap now %d!" % RunManager.ball_cap)
+			AudioManager.play_shop_purchase()
 
 	_update_info()
 	_refresh_selection()

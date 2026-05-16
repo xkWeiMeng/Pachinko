@@ -67,6 +67,16 @@ func _build() -> void:
 		add_child(card)
 		_card_panels.append(card)
 
+	# Entry animation: slide cards in from below
+	for i in _card_panels.size():
+		var target_y: float = _card_panels[i].position.y
+		_card_panels[i].position.y = BOARD_H + 50
+		_card_panels[i].modulate.a = 0.0
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(_card_panels[i], "position:y", target_y, 0.3).set_delay(i * 0.08).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tween.tween_property(_card_panels[i], "modulate:a", 1.0, 0.2).set_delay(i * 0.08)
+
 	# Skip button
 	var skip_label := Label.new()
 	skip_label.text = "[ SKIP ]"

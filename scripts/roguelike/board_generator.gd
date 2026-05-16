@@ -18,8 +18,8 @@ static func generate(floor_num: int, act: int, is_elite: bool, rng: RandomNumber
 	var base_difficulty := 1.0 + (floor_num - 1) * 0.15
 
 	# Pin grid parameters
-	var pin_rows := clampi(8 + floori(base_difficulty * 1.5), 8, 16)
-	var pin_cols := clampi(6 + floori(base_difficulty * 0.8), 6, 12)
+	var pin_rows := clampi(8 + floori(base_difficulty * 1.2), 8, 16)
+	var pin_cols := clampi(6 + floori(base_difficulty * 0.5), 6, 12)
 	var h_spacing := clampf(lerpf(55.0, 35.0, base_difficulty / 3.0), 35.0, 55.0)
 
 	# Center pin grid in playable area
@@ -28,8 +28,8 @@ static func generate(floor_num: int, act: int, is_elite: bool, rng: RandomNumber
 	var pin_origin_y := 200.0 + rng.randf_range(-10.0, 10.0)
 
 	# Cup parameters
-	var cup_count := clampi(3 + floori(base_difficulty * 0.8), 3, 9)
-	var base_cup_width := clampf(50.0 * (1.0 - base_difficulty * 0.03), 25.0, 60.0)
+	var cup_count := clampi(4 + floori(base_difficulty * 0.8), 4, 9)
+	var base_cup_width := clampf(55.0 * (1.0 - base_difficulty * 0.03), 25.0, 65.0)
 
 	# Generate cups
 	var cups: Array[Dictionary] = []

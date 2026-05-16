@@ -29,13 +29,13 @@ static func generate(floor_num: int, act: int, rng: RandomNumberGenerator) -> Fl
 
 	match obj.type:
 		Type.TARGET_SCORE:
-			obj.target_value = 500 + floor_num * 300
+			obj.target_value = 300 + floor_num * 200
 		Type.CAPTURES:
-			obj.target_value = 5 + floor_num * 1
+			obj.target_value = 3 + floor_num * 1
 		Type.COMBO:
 			obj.target_value = 3 + floori(floor_num / 3.0)
 		Type.SURVIVAL:
-			obj.target_value = 30 + floor_num * 5
+			obj.target_value = 20 + floor_num * 3
 		Type.ALL_CUPS:
 			# Will be set by RunManager once cups are known
 			obj.target_value = 5

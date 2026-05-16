@@ -50,20 +50,20 @@ func _init_relic_database() -> void:
 		"wide_cups": {
 			"id": "wide_cups",
 			"name": "宽容之杯",
-			"description": "Cup openings are 15% wider",
+			"description": "Cup openings are 20% wider",
 			"rarity": Rarity.COMMON,
 			"icon_char": "🏆",
 			"category": Category.BOARD,
-			"effects": {"cup_width_mult": 1.15},
+			"effects": {"cup_width_mult": 1.2},
 		},
 		"insurance": {
 			"id": "insurance",
 			"name": "保险机制",
-			"description": "20% chance to save a drained ball",
+			"description": "25% chance to save a drained ball",
 			"rarity": Rarity.RARE,
 			"icon_char": "🛡",
 			"category": Category.SCORING,
-			"effects": {"drain_save_chance": 0.2},
+			"effects": {"drain_save_chance": 0.25},
 		},
 		"copper_bag": {
 			"id": "copper_bag",
@@ -151,11 +151,11 @@ func _init_relic_database() -> void:
 		"greedy_heart": {
 			"id": "greedy_heart",
 			"name": "贪婪之心",
-			"description": "Cup rewards ×2 but ball cap -30%",
+			"description": "Cup rewards ×2 but ball cap -20%",
 			"rarity": Rarity.EPIC,
 			"icon_char": "💜",
 			"category": Category.SCORING,
-			"effects": {"reward_mult": 2.0, "ball_cap_penalty": 0.3},
+			"effects": {"reward_mult": 2.0, "ball_cap_penalty": 0.2},
 		},
 		"lucky_seven": {
 			"id": "lucky_seven",
@@ -261,6 +261,7 @@ func add_relic(relic_id: String) -> void:
 	active_relics.append(relic)
 	_rebuild_modifier_cache()
 	relic_added.emit(relic)
+	AudioManager.play_relic_acquire()
 	EventBus.relic_acquired.emit(relic)
 
 

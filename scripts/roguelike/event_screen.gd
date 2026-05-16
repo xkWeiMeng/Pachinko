@@ -74,6 +74,7 @@ func _ready() -> void:
 	layer = 20
 	_pick_event()
 	_build()
+	AudioManager.play_event_chime()
 	call_deferred("_enable_input")
 
 

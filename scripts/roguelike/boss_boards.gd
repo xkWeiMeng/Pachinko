@@ -58,7 +58,7 @@ static func _gatekeeper_config(rng: RandomNumberGenerator) -> Dictionary:
 		"trigger_offsets": [Vector2(-30, -40), Vector2(0, -55), Vector2(30, -40)] as Array[Vector2],
 		"modifiers": [] as Array[Dictionary],
 		"objective_type": "TARGET_SCORE",
-		"objective_target": 2000,
+		"objective_target": 1500,
 	}
 
 
@@ -190,5 +190,5 @@ static func _pachinko_god_config(rng: RandomNumberGenerator) -> Dictionary:
 		] as Array[Vector2],
 		"modifiers": [] as Array[Dictionary],
 		"objective_type": "TARGET_SCORE",
-		"objective_target": 5000,
+		"objective_target": 3000,
 	}

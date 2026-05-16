@@ -37,6 +37,7 @@ var _act: int = 1
 var _last_cleared_node_idx: int = -1
 var _accessible_nodes: Array[int] = []
 var _draw_panel: Control
+var _pulse_time: float = 0.0
 
 
 func setup(map_data: Array[Array], current_layer: int, ball_count: int, score: int, act: int, last_cleared_idx: int = -1) -> void:
@@ -195,6 +196,12 @@ func _draw_map() -> void:
 				node_color = Color(node_color.r * 0.3, node_color.g * 0.3, node_color.b * 0.3, 0.4)
 			elif not is_current_layer and layer_idx > _current_layer:
 				node_color = Color(node_color.r * 0.5, node_color.g * 0.5, node_color.b * 0.5, 0.5)
+
+			# Pulsing glow for accessible nodes
+			if is_accessible and not is_cleared:
+				var pulse_alpha := 0.2 + 0.15 * sin(_pulse_time * 3.0)
+				_draw_panel.draw_circle(Vector2(x, y), NODE_RADIUS + 8, Color(1.0, 0.9, 0.3, pulse_alpha))
+
 			if is_selected and is_accessible:
 				# Selection glow
 				_draw_panel.draw_circle(Vector2(x, y), NODE_RADIUS + 6, Color(1.0, 0.85, 0.2, 0.4))
@@ -224,16 +231,22 @@ func _draw_map() -> void:
 				type_label_color
 			)
 
-			# Floor number further below
-			if is_current_layer or is_cleared:
-				var floor_text := "F%d" % node.get("floor_num", 0)
-				var ft_size := font.get_string_size(floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 8)
-				_draw_panel.draw_string(
-					font,
-					Vector2(x - ft_size.x / 2.0, y + NODE_RADIUS + 25),
-					floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 8,
-					Color(0.4, 0.4, 0.5)
-				)
+			# Floor number for all nodes
+			var floor_text := "F%d" % node.get("floor_num", 0)
+			var ft_size := font.get_string_size(floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 9)
+			var floor_label_color := Color(0.5, 0.5, 0.6)
+			if is_current_layer and is_accessible:
+				floor_label_color = Color(0.7, 0.7, 0.8)
+			elif is_cleared:
+				floor_label_color = Color(0.3, 0.4, 0.3)
+			elif not is_current_layer and layer_idx > _current_layer:
+				floor_label_color = Color(0.3, 0.3, 0.35)
+			_draw_panel.draw_string(
+				font,
+				Vector2(x - ft_size.x / 2.0, y + NODE_RADIUS + 25),
+				floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 9,
+				floor_label_color
+			)
 
 
 func _get_node_x(count: int, idx: int) -> float:
@@ -263,6 +276,9 @@ func _process(_delta: float) -> void:
 
 	if _accessible_nodes.is_empty():
 		return
+
+	_pulse_time += _delta
+	_draw_panel.queue_redraw()
 
 	if Input.is_action_just_pressed("ui_up"):
 		_cycle_selection(-1)

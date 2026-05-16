@@ -11,6 +11,10 @@ const BOARD_H := 960.0
 var _won: bool = false
 var _stats: Dictionary = {}
 var _input_ready: bool = false
+var _score_value_label: Label
+var _score_tween: Tween
+var _last_value_label: Label
+var _animated_score: float = 0.0
 
 
 func setup(won: bool, stats: Dictionary) -> void:
@@ -26,6 +30,24 @@ func _ready() -> void:
 
 func _enable_input() -> void:
 	_input_ready = true
+	_start_score_animation()
+
+
+func _start_score_animation() -> void:
+	if not _score_value_label:
+		return
+	var final_score: int = _stats.get("final_score", 0)
+	if final_score <= 0:
+		_score_value_label.text = "0"
+		return
+	_animated_score = 0.0
+	_score_tween = create_tween()
+	_score_tween.tween_method(_update_score_display, 0.0, float(final_score), 1.0).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+func _update_score_display(value: float) -> void:
+	if _score_value_label:
+		_score_value_label.text = str(int(value))
 
 
 func _build() -> void:
@@ -72,7 +94,8 @@ func _build() -> void:
 
 	_add_stat_line("Floors Cleared", str(_stats.get("floors_cleared", 0)), stats_y, accent_color)
 	stats_y += stats_gap
-	_add_stat_line("Final Score", str(_stats.get("final_score", 0)), stats_y, accent_color)
+	_add_stat_line("Final Score", "0", stats_y, accent_color)
+	_score_value_label = _get_last_value_label()
 	stats_y += stats_gap
 	_add_stat_line("Balls Remaining", str(_stats.get("balls_remaining", 0)), stats_y, accent_color)
 	stats_y += stats_gap
@@ -150,6 +173,11 @@ func _add_stat_line(label_text: String, value_text: String, y: float, color: Col
 	value.size = Vector2(200, 25)
 	value.position = Vector2(260, y)
 	add_child(value)
+	_last_value_label = value
+
+
+func _get_last_value_label() -> Label:
+	return _last_value_label
 
 
 func _process(_delta: float) -> void:

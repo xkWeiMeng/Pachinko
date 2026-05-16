@@ -95,8 +95,8 @@ func select_map_node(layer_idx: int, node_idx: int) -> void:
 			_set_phase(RunPhase.EVENT)
 		MapGeneratorScript.NodeType.REST:
 			_set_phase(RunPhase.REST)
-			# Rest: heal 10 balls
-			ball_pool = mini(ball_pool + 10, ball_cap)
+			# Rest: heal 15 balls (capped at ball_cap)
+			ball_pool = mini(ball_pool + mini(15, ball_cap - ball_pool), ball_cap)
 
 
 func _start_floor(node: Dictionary) -> void:

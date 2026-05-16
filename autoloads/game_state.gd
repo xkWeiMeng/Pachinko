@@ -113,11 +113,6 @@ func _on_ball_captured(reward: int, is_crit: bool, _ball: RigidBody2D) -> void:
 
 func _on_ball_lost(_ball: RigidBody2D) -> void:
 	combo_count = 0
-	if roguelike_mode:
-		var save_chance: float = RelicManager.get_modifier("drain_save_chance", 0.0)
-		if save_chance > 0.0 and randf() < save_chance:
-			add_balls(1)
-			return
 	_check_game_over()
 
 

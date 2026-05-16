@@ -35,7 +35,7 @@ var _current_objective: RefCounted = null  # FloorObjective
 
 
 func _ready() -> void:
-	EventBus.floor_cleared.connect(_on_floor_cleared)
+	pass
 
 
 func start_run() -> void:

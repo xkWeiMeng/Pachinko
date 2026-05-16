@@ -167,13 +167,13 @@ func _init_board_configs() -> void:
 	]
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if GameState.current_phase != GameState.Phase.PLAYING:
 		return
 	# Roguelike: update survival objective timer
 	if roguelike_mode and floor_objective and not floor_objective.completed:
 		if floor_objective.type == FloorObjectiveScript.Type.SURVIVAL:
-			_objective_timer += _delta
+			_objective_timer += delta
 			floor_objective.update("time", floori(_objective_timer))
 			EventBus.floor_objective_updated.emit(
 				floor_objective.current_value,

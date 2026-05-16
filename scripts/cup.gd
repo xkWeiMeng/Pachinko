@@ -97,6 +97,8 @@ func _on_ball_entered(body: Node2D) -> void:
 		AudioManager.play_capture()
 		if is_crit:
 			EventBus.spin_started.emit()
+		elif is_instance_valid(RelicManager) and RelicManager.get_modifier("any_cup_triggers_slot", false):
+			EventBus.spin_started.emit()
 		_play_capture_effect()
 
 

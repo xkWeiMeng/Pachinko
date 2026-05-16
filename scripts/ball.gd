@@ -37,6 +37,12 @@ func _ready() -> void:
 	shape.shape = circle
 	add_child(shape)
 
+	# Apply ball_mass_mult relic modifier
+	if is_instance_valid(RelicManager):
+		var mass_mult: float = RelicManager.get_modifier("ball_mass_mult", 1.0)
+		if mass_mult != 1.0:
+			mass *= mass_mult
+
 	body_entered.connect(_on_body_entered)
 
 
@@ -44,11 +50,16 @@ func _physics_process(_delta: float) -> void:
 	_trail_positions.push_front(global_position)
 	if _trail_positions.size() > TRAIL_LENGTH:
 		_trail_positions.resize(TRAIL_LENGTH)
-	# Near-cup slowdown from sticky_shell relic
 	if is_instance_valid(RelicManager):
+		# Near-cup slowdown from sticky_shell relic
 		var slowdown: float = RelicManager.get_modifier("near_cup_slowdown", 0.0)
 		if slowdown > 0.0 and global_position.y > 700.0:
 			linear_velocity *= (1.0 - slowdown * _delta * 2.0)
+		# Wind force from elite modifier
+		if is_instance_valid(GameState):
+			var wind: float = GameState.wind_force
+			if wind != 0.0:
+				linear_velocity.x += wind * _delta
 	queue_redraw()
 
 
@@ -73,8 +84,18 @@ func _draw() -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("peg"):
+		# Pin phase chance (ghost_core relic)
+		if is_instance_valid(RelicManager):
+			var phase_chance: float = RelicManager.get_modifier("pin_phase_chance", 0.0)
+			if phase_chance > 0.0 and randf() < phase_chance:
+				return  # Phase through pin — skip hit
 		EventBus.peg_hit.emit(body, self)
 		AudioManager.play_pin_hit(randf_range(0.8, 1.2))
+		# Pin hit score (midas_touch relic)
+		if is_instance_valid(RelicManager):
+			var pin_score: int = RelicManager.get_modifier("pin_hit_score", 0)
+			if pin_score > 0:
+				GameState.add_score(pin_score)
 
 
 func captured(is_crit: bool, reward: int = 15) -> void:

@@ -34,17 +34,24 @@ var _input_ready: bool = false
 var _ball_count: int = 0
 var _score: int = 0
 var _act: int = 1
+var _last_cleared_node_idx: int = -1
+var _accessible_nodes: Array[int] = []
 var _draw_panel: Control
 
 
-func setup(map_data: Array[Array], current_layer: int, ball_count: int, score: int, act: int) -> void:
+func setup(map_data: Array[Array], current_layer: int, ball_count: int, score: int, act: int, last_cleared_idx: int = -1) -> void:
 	_map_data = map_data
 	_current_layer = current_layer
 	_ball_count = ball_count
 	_score = score
 	_act = act
-	# Auto-select first available node
-	_selected_node = 0
+	_last_cleared_node_idx = last_cleared_idx
+	_compute_accessible_nodes()
+	# Auto-select first accessible node
+	if _accessible_nodes.is_empty():
+		_selected_node = 0
+	else:
+		_selected_node = _accessible_nodes[0]
 
 
 func _ready() -> void:
@@ -99,6 +106,17 @@ func _build() -> void:
 	score_label.size = Vector2(200, 20)
 	score_label.position = Vector2(BOARD_W - 220, 35)
 	info_bar.add_child(score_label)
+
+	# Relic count
+	var relic_count: int = 0
+	if is_instance_valid(RelicManager):
+		relic_count = RelicManager.active_relics.size()
+	var relic_label := Label.new()
+	relic_label.text = "RELICS: %d" % relic_count
+	relic_label.add_theme_font_size_override("font_size", 12)
+	relic_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.8))
+	relic_label.position = Vector2(20, 40)
+	info_bar.add_child(relic_label)
 
 	# Controls hint
 	var hint := Label.new()
@@ -170,9 +188,14 @@ func _draw_map() -> void:
 
 			# Node circle
 			var node_color := _get_node_color(node_type)
+			var is_accessible := is_current_layer and (node_idx in _accessible_nodes)
 			if is_cleared:
 				node_color = Color(node_color.r, node_color.g, node_color.b, 0.3)
-			if is_selected:
+			elif is_current_layer and not is_accessible:
+				node_color = Color(node_color.r * 0.3, node_color.g * 0.3, node_color.b * 0.3, 0.4)
+			elif not is_current_layer and layer_idx > _current_layer:
+				node_color = Color(node_color.r * 0.5, node_color.g * 0.5, node_color.b * 0.5, 0.5)
+			if is_selected and is_accessible:
 				# Selection glow
 				_draw_panel.draw_circle(Vector2(x, y), NODE_RADIUS + 6, Color(1.0, 0.85, 0.2, 0.4))
 
@@ -188,15 +211,28 @@ func _draw_map() -> void:
 				type_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 14, Color.WHITE
 			)
 
-			# Floor number below node
+			# Node type label below node
+			var type_name: String = NODE_TYPE_NAMES.get(node_type, "?")
+			var tn_size := font.get_string_size(type_name, HORIZONTAL_ALIGNMENT_CENTER, -1, 9)
+			var type_label_color := Color(0.5, 0.5, 0.6)
+			if is_current_layer and not is_accessible:
+				type_label_color = Color(0.3, 0.3, 0.35)
+			_draw_panel.draw_string(
+				font,
+				Vector2(x - tn_size.x / 2.0, y + NODE_RADIUS + 14),
+				type_name, HORIZONTAL_ALIGNMENT_CENTER, -1, 9,
+				type_label_color
+			)
+
+			# Floor number further below
 			if is_current_layer or is_cleared:
 				var floor_text := "F%d" % node.get("floor_num", 0)
-				var ft_size := font.get_string_size(floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 9)
+				var ft_size := font.get_string_size(floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 8)
 				_draw_panel.draw_string(
 					font,
-					Vector2(x - ft_size.x / 2.0, y + NODE_RADIUS + 14),
-					floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 9,
-					Color(0.5, 0.5, 0.6)
+					Vector2(x - ft_size.x / 2.0, y + NODE_RADIUS + 25),
+					floor_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 8,
+					Color(0.4, 0.4, 0.5)
 				)
 
 
@@ -225,21 +261,66 @@ func _process(_delta: float) -> void:
 	if _map_data.is_empty() or _current_layer >= _map_data.size():
 		return
 
-	var current_nodes: Array = _map_data[_current_layer]
+	if _accessible_nodes.is_empty():
+		return
 
 	if Input.is_action_just_pressed("ui_up"):
-		_selected_node = (_selected_node - 1 + current_nodes.size()) % current_nodes.size()
+		_cycle_selection(-1)
 		_draw_panel.queue_redraw()
 	elif Input.is_action_just_pressed("ui_down"):
-		_selected_node = (_selected_node + 1) % current_nodes.size()
+		_cycle_selection(1)
 		_draw_panel.queue_redraw()
 	elif Input.is_action_just_pressed("launch") or Input.is_action_just_pressed("ui_accept"):
 		_confirm()
 
 
+func _cycle_selection(direction: int) -> void:
+	if _accessible_nodes.is_empty():
+		return
+	var current_pos := _accessible_nodes.find(_selected_node)
+	if current_pos < 0:
+		current_pos = 0
+	current_pos = (current_pos + direction + _accessible_nodes.size()) % _accessible_nodes.size()
+	_selected_node = _accessible_nodes[current_pos]
+
+
 func _confirm() -> void:
 	if _current_layer < _map_data.size():
-		var current_nodes: Array = _map_data[_current_layer]
-		if _selected_node >= 0 and _selected_node < current_nodes.size():
+		if _selected_node in _accessible_nodes:
 			node_selected.emit(_current_layer, _selected_node)
 			queue_free()
+
+
+func _compute_accessible_nodes() -> void:
+	_accessible_nodes.clear()
+	if _map_data.is_empty() or _current_layer >= _map_data.size():
+		return
+
+	var current_nodes: Array = _map_data[_current_layer]
+
+	if _current_layer == 0:
+		# Layer 0: all nodes are accessible
+		for i in current_nodes.size():
+			_accessible_nodes.append(i)
+		return
+
+	# For layer N > 0, only nodes connected from the cleared node in layer N-1
+	if _last_cleared_node_idx < 0:
+		# Fallback: all accessible
+		for i in current_nodes.size():
+			_accessible_nodes.append(i)
+		return
+
+	var prev_layer: Array = _map_data[_current_layer - 1]
+	if _last_cleared_node_idx < prev_layer.size():
+		var prev_node: Dictionary = prev_layer[_last_cleared_node_idx]
+		var connections: Array = prev_node.get("connections", [])
+		for conn_idx in connections:
+			if conn_idx < current_nodes.size() and conn_idx not in _accessible_nodes:
+				_accessible_nodes.append(conn_idx)
+	_accessible_nodes.sort()
+
+	# Fallback if no connections found
+	if _accessible_nodes.is_empty():
+		for i in current_nodes.size():
+			_accessible_nodes.append(i)

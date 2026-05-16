@@ -6,6 +6,8 @@ const PLAY_RIGHT: float = 487.0
 const PLAY_W: float = 477.0
 const PLAY_CX: float = 248.5
 
+const FloorModifiersScript = preload("res://scripts/roguelike/floor_modifiers.gd")
+
 const BOARD_NAMES: Array[String] = [
 	"NEBULA", "CRYSTAL", "VOID", "PULSE", "FLUX",
 	"ABYSS", "PRISM", "NOVA", "DRIFT", "CHAOS",
@@ -77,7 +79,7 @@ static func generate(floor_num: int, act: int, is_elite: bool, rng: RandomNumber
 
 	var board_name: String = BOARD_NAMES[rng.randi_range(0, BOARD_NAMES.size() - 1)]
 
-	return {
+	var result: Dictionary = {
 		"name": board_name,
 		"pin_rows": pin_rows,
 		"pin_cols": pin_cols,
@@ -87,4 +89,15 @@ static func generate(floor_num: int, act: int, is_elite: bool, rng: RandomNumber
 		"tulip_pos": tulip_pos,
 		"chacker_pos": chacker_pos,
 		"trigger_offsets": trigger_offsets,
+		"modifiers": [] as Array[Dictionary],
 	}
+
+	# Elite/boss boards get random floor modifiers
+	if is_elite:
+		var mod_count := rng.randi_range(1, 2)
+		var modifiers := FloorModifiersScript.get_random_modifiers(mod_count, rng)
+		result["modifiers"] = modifiers
+		# Apply config-time modifiers (narrow_path, mirror)
+		FloorModifiersScript.apply_config_modifiers(modifiers, result, rng)
+
+	return result

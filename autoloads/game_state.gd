@@ -19,6 +19,12 @@ var balls_cap: int = 150
 var free_ball_counter: int = 0
 var roguelike_mode: bool = false
 var _floor_score: int = 0
+var floor_balls_lost: int = 0
+
+# Elite modifier state
+var wind_force: float = 0.0
+var hot_pins: Array[Node2D] = []
+var active_modifiers: Array[Dictionary] = []
 
 const STARTING_BALLS: int = 100
 const NORMAL_CAPTURE_REWARD: int = 15
@@ -51,12 +57,16 @@ func start_floor(starting_balls: int, cap: int) -> void:
 	roguelike_mode = true
 	score = 0
 	_floor_score = 0
+	floor_balls_lost = 0
 	balls_remaining = starting_balls
 	balls_cap = cap
 	current_phase = Phase.PLAYING
 	combo_count = 0
 	total_captures = 0
 	free_ball_counter = 0
+	wind_force = 0.0
+	hot_pins.clear()
+	active_modifiers.clear()
 	score_changed.emit(score)
 	balls_changed.emit(balls_remaining)
 
@@ -113,6 +123,7 @@ func _on_ball_captured(reward: int, is_crit: bool, _ball: RigidBody2D) -> void:
 
 func _on_ball_lost(_ball: RigidBody2D) -> void:
 	combo_count = 0
+	floor_balls_lost += 1
 	_check_game_over()
 
 

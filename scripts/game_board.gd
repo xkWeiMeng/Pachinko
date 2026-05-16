@@ -22,6 +22,9 @@ const MapScreenScript = preload("res://scripts/roguelike/map_screen.gd")
 const RelicSelectionScript = preload("res://scripts/roguelike/relic_selection_screen.gd")
 const RunSummaryScript = preload("res://scripts/roguelike/run_summary_screen.gd")
 const FloorObjectiveScript = preload("res://scripts/roguelike/floor_objective.gd")
+const ShopScreenScript = preload("res://scripts/roguelike/shop_screen.gd")
+const EventScreenScript = preload("res://scripts/roguelike/event_screen.gd")
+const FloorModifiersScript = preload("res://scripts/roguelike/floor_modifiers.gd")
 
 const BOARD_W: float = 540.0
 const BOARD_H: float = 960.0
@@ -66,8 +69,11 @@ var floor_objective: RefCounted = null
 var _map_screen: CanvasLayer = null
 var _relic_screen: CanvasLayer = null
 var _summary_screen: CanvasLayer = null
+var _shop_screen: CanvasLayer = null
+var _event_screen: CanvasLayer = null
 var _floor_cleared_overlay: CanvasLayer = null
 var _objective_timer: float = 0.0
+var _moving_cup_time: float = 0.0
 
 
 func _ready() -> void:
@@ -180,6 +186,10 @@ func _process(delta: float) -> void:
 				floor_objective.target_value,
 				floor_objective.get_description(),
 			)
+		# Moving cups runtime modifier
+		_update_moving_cups(delta)
+		# Black hole pull on balls
+		_update_black_holes(delta)
 		return  # No board switching in roguelike mode
 	if Input.is_action_just_pressed("ui_left"):
 		_switch_board(-1)
@@ -243,6 +253,7 @@ func _show_map_screen() -> void:
 		RunManager.ball_pool,
 		RunManager.run_score,
 		RunManager.current_act,
+		RunManager.last_cleared_node_idx,
 	)
 	_map_screen.node_selected.connect(_on_map_node_selected)
 	add_child(_map_screen)
@@ -259,8 +270,12 @@ func _on_run_phase_changed(new_phase: int) -> void:
 			_show_map_screen()
 		RunManager.RunPhase.RELIC_SELECT:
 			_show_relic_selection()
-		RunManager.RunPhase.REST, RunManager.RunPhase.SHOP, RunManager.RunPhase.EVENT:
-			# For non-combat nodes, show briefly and advance
+		RunManager.RunPhase.SHOP:
+			_show_shop_screen()
+		RunManager.RunPhase.EVENT:
+			_show_event_screen()
+		RunManager.RunPhase.REST:
+			# For rest nodes, skip immediately (healing already applied in RunManager)
 			RunManager.skip_non_combat_node()
 
 
@@ -292,14 +307,24 @@ func _on_run_floor_started(floor_num: int, config: Dictionary) -> void:
 func setup_roguelike_floor(config: Dictionary, objective: RefCounted) -> void:
 	roguelike_config = config
 	floor_objective = objective
+	_moving_cup_time = 0.0
 
 	# Tear down existing physics and rebuild with roguelike config
 	_tear_down_physics()
 	_build_physics_world()
 	_reconnect_bar_launcher()
 
+	# Apply runtime modifiers (hot pins, moving cups, black holes, wind)
+	var modifiers: Array = config.get("modifiers", [])
+	if not modifiers.is_empty() and _physics_world:
+		var mod_array: Array[Dictionary] = []
+		for m in modifiers:
+			mod_array.append(m)
+		FloorModifiersScript.apply_runtime_modifiers(mod_array, _physics_world, RunManager.rng)
+
 	# Start floor in GameState
 	GameState.start_floor(RunManager.ball_pool, RunManager.ball_cap)
+	GameState.active_modifiers = modifiers
 
 	# Setup HUD for roguelike
 	if _hud:
@@ -308,6 +333,7 @@ func setup_roguelike_floor(config: Dictionary, objective: RefCounted) -> void:
 			RunManager.current_act,
 			floor_objective.get_description(),
 		)
+		_hud.show_modifiers(modifiers)
 
 	# Create bottom bar if needed (roguelike mode: no board switching)
 	if not _bottom_bar:
@@ -418,6 +444,60 @@ func _on_relic_picked(relic_id: String) -> void:
 
 func _on_relic_skip() -> void:
 	RunManager.on_relic_skipped()
+
+
+func _show_shop_screen() -> void:
+	_shop_screen = ShopScreenScript.new()
+	_shop_screen.shop_closed.connect(_on_shop_closed)
+	add_child(_shop_screen)
+
+
+func _on_shop_closed() -> void:
+	_shop_screen = null
+	RunManager.skip_non_combat_node()
+
+
+func _show_event_screen() -> void:
+	_event_screen = EventScreenScript.new()
+	_event_screen.event_closed.connect(_on_event_closed)
+	add_child(_event_screen)
+
+
+func _on_event_closed() -> void:
+	_event_screen = null
+	RunManager.skip_non_combat_node()
+
+
+func _update_moving_cups(delta: float) -> void:
+	_moving_cup_time += delta
+	if not _physics_world:
+		return
+	for child in _physics_world.get_children():
+		if child.is_in_group("moving_cup"):
+			var base_x: float = child.get_meta("base_x", child.position.x)
+			if not child.has_meta("base_x"):
+				child.set_meta("base_x", child.position.x)
+			child.position.x = base_x + sin(_moving_cup_time * 1.5) * 25.0
+
+
+func _update_black_holes(delta: float) -> void:
+	if not _physics_world:
+		return
+	var black_holes := get_tree().get_nodes_in_group("black_hole")
+	if black_holes.is_empty():
+		return
+	var balls := get_tree().get_nodes_in_group("ball")
+	for ball in balls:
+		if not is_instance_valid(ball) or not ball is RigidBody2D:
+			continue
+		for bh in black_holes:
+			if not is_instance_valid(bh):
+				continue
+			var dist := ball.global_position.distance_to(bh.global_position)
+			if dist < 80.0 and dist > 5.0:
+				var pull_strength: float = bh.get_meta("pull_strength", 150.0)
+				var direction := (bh.global_position - ball.global_position).normalized()
+				ball.linear_velocity += direction * pull_strength * delta * (1.0 - dist / 80.0)
 
 
 func _create_bottom_bar() -> void:
@@ -553,13 +633,21 @@ func _build_physics_world() -> void:
 	_balls_container = Node2D.new()
 	_balls_container.name = "Balls"
 	_physics_world.add_child(_balls_container)
+
+	# Determine launcher position (mirror modifier flips to left side)
+	var launcher_pos := LAUNCHER_POS
+	var rail_x := LAUNCHER_POS.x
+	if cfg.get("mirror_launcher", false):
+		launcher_pos = Vector2(35.0, 850.0)
+		rail_x = 35.0
+
 	_rail = RailScript.new()
-	_rail.position = Vector2(LAUNCHER_POS.x, 0.0)
+	_rail.position = Vector2(rail_x, 0.0)
 	_rail.channel_top = 100.0
-	_rail.channel_bottom = LAUNCHER_POS.y
+	_rail.channel_bottom = launcher_pos.y
 	_physics_world.add_child(_rail)
 	_launcher = LauncherScript.new()
-	_launcher.position = LAUNCHER_POS
+	_launcher.position = launcher_pos
 	_launcher.setup(_balls_container)
 	_physics_world.add_child(_launcher)
 	_add_cup_dividers(_physics_world, cup_defs.size())
@@ -604,6 +692,14 @@ func _on_peg_hit(peg: StaticBody2D, _ball: RigidBody2D) -> void:
 		peg.on_hit()
 	if peg.is_in_group("tulip_trigger"):
 		EventBus.tulip_triggered.emit()
+	# Hot pin modifier: lose 1 ball when hitting a hot pin
+	if roguelike_mode and peg.is_in_group("hot_pin"):
+		var hazard_resist: float = 0.0
+		if is_instance_valid(RelicManager):
+			hazard_resist = RelicManager.get_modifier("hazard_resist", 0.0)
+		if hazard_resist <= 0.0 or randf() >= hazard_resist:
+			GameState.balls_remaining = maxi(GameState.balls_remaining - 1, 0)
+			GameState.balls_changed.emit(GameState.balls_remaining)
 
 
 func _on_peg_hit_effects(peg: StaticBody2D, _ball: RigidBody2D) -> void:

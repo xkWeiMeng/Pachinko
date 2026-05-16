@@ -92,6 +92,163 @@ func _init_relic_database() -> void:
 			"category": Category.PHYSICS,
 			"effects": {"near_cup_slowdown": 0.3},
 		},
+		# --- Phase 2 Physics relics ---
+		"gravity_core": {
+			"id": "gravity_core",
+			"name": "重力核心",
+			"description": "Ball mass +50% (heavier = faster fall)",
+			"rarity": Rarity.COMMON,
+			"icon_char": "⬛",
+			"category": Category.PHYSICS,
+			"effects": {"ball_mass_mult": 1.5},
+		},
+		"ghost_core": {
+			"id": "ghost_core",
+			"name": "幽灵核",
+			"description": "15% chance to phase through pins",
+			"rarity": Rarity.RARE,
+			"icon_char": "👻",
+			"category": Category.PHYSICS,
+			"effects": {"pin_phase_chance": 0.15},
+		},
+		"split_shot": {
+			"id": "split_shot",
+			"name": "分裂弹",
+			"description": "First collision splits ball into 2",
+			"rarity": Rarity.EPIC,
+			"icon_char": "💥",
+			"category": Category.PHYSICS,
+			"effects": {"split_on_first_hit": true},
+		},
+		"magnet_field": {
+			"id": "magnet_field",
+			"name": "磁力场",
+			"description": "Balls slightly pulled toward nearest cup",
+			"rarity": Rarity.EPIC,
+			"icon_char": "🧲",
+			"category": Category.PHYSICS,
+			"effects": {"cup_magnet_strength": 0.15},
+		},
+		"quantum_link": {
+			"id": "quantum_link",
+			"name": "量子纠缠",
+			"description": "Creates shadow ball on same trajectory 0.3s delayed",
+			"rarity": Rarity.LEGENDARY,
+			"icon_char": "⚛",
+			"category": Category.PHYSICS,
+			"effects": {"shadow_ball": true},
+		},
+		# --- Phase 2 Scoring relics ---
+		"interest": {
+			"id": "interest",
+			"name": "利息",
+			"description": "Gain 5% of current balls at floor start",
+			"rarity": Rarity.RARE,
+			"icon_char": "📈",
+			"category": Category.SCORING,
+			"effects": {"floor_start_interest": 0.05},
+		},
+		"greedy_heart": {
+			"id": "greedy_heart",
+			"name": "贪婪之心",
+			"description": "Cup rewards ×2 but ball cap -30%",
+			"rarity": Rarity.EPIC,
+			"icon_char": "💜",
+			"category": Category.SCORING,
+			"effects": {"reward_mult": 2.0, "ball_cap_penalty": 0.3},
+		},
+		"lucky_seven": {
+			"id": "lucky_seven",
+			"name": "幸运七",
+			"description": "Jackpot probability +50%",
+			"rarity": Rarity.EPIC,
+			"icon_char": "🎰",
+			"category": Category.SCORING,
+			"effects": {"jackpot_bonus": 0.5},
+		},
+		"midas_touch": {
+			"id": "midas_touch",
+			"name": "点金术",
+			"description": "Each pin collision gives 1 score",
+			"rarity": Rarity.LEGENDARY,
+			"icon_char": "✨",
+			"category": Category.SCORING,
+			"effects": {"pin_hit_score": 1},
+		},
+		# --- Phase 2 Board relics ---
+		"slot_machine_plus": {
+			"id": "slot_machine_plus",
+			"name": "永动老虎机",
+			"description": "Any cup capture triggers slot (not just crit)",
+			"rarity": Rarity.RARE,
+			"icon_char": "🎲",
+			"category": Category.BOARD,
+			"effects": {"any_cup_triggers_slot": true},
+		},
+		"trap_immunity": {
+			"id": "trap_immunity",
+			"name": "陷阱免疫",
+			"description": "Hazard effects reduced by 50%",
+			"rarity": Rarity.RARE,
+			"icon_char": "🛡️",
+			"category": Category.BOARD,
+			"effects": {"hazard_resist": 0.5},
+		},
+		"cup_magnet_big": {
+			"id": "cup_magnet_big",
+			"name": "杯子磁铁",
+			"description": "One random cup width ×3 at floor start",
+			"rarity": Rarity.EPIC,
+			"icon_char": "🏟",
+			"category": Category.BOARD,
+			"effects": {"random_big_cup": true},
+		},
+		"golden_drain": {
+			"id": "golden_drain",
+			"name": "黄金排水口",
+			"description": "Drain becomes a low-reward cup (1 ball + 10 score)",
+			"rarity": Rarity.LEGENDARY,
+			"icon_char": "🌟",
+			"category": Category.BOARD,
+			"effects": {"golden_drain": true},
+		},
+		# --- Phase 2 Conditional relics ---
+		"first_shot": {
+			"id": "first_shot",
+			"name": "首弹强化",
+			"description": "First ball each floor scores ×3",
+			"rarity": Rarity.COMMON,
+			"icon_char": "1️⃣",
+			"category": Category.CONDITIONAL,
+			"effects": {"first_ball_score_mult": 3},
+		},
+		"desperation": {
+			"id": "desperation",
+			"name": "背水一战",
+			"description": "When balls ≤10, cup rewards ×2",
+			"rarity": Rarity.RARE,
+			"icon_char": "🔥",
+			"category": Category.CONDITIONAL,
+			"effects": {"low_ball_reward_mult": 2.0, "low_ball_threshold": 10},
+		},
+		"perfectionist": {
+			"id": "perfectionist",
+			"name": "完美主义",
+			"description": "0 balls lost in a floor → +15 balls",
+			"rarity": Rarity.EPIC,
+			"icon_char": "💎",
+			"category": Category.CONDITIONAL,
+			"effects": {"perfect_floor_bonus": 15},
+		},
+		"collector": {
+			"id": "collector",
+			"name": "收藏家",
+			"description": "Every 5 relics owned → all cup rewards +1",
+			"rarity": Rarity.EPIC,
+			"icon_char": "📦",
+			"category": Category.CONDITIONAL,
+			"effects": {"relic_count_bonus": true},
+		},
 	}
 
 
@@ -171,6 +328,15 @@ func _rebuild_modifier_cache() -> void:
 				_modifier_cache[key] = _modifier_cache.get(key, false) or value
 			else:
 				_modifier_cache[key] = value
+
+
+func get_relics_by_rarity(rarity: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for id in _relic_database:
+		var relic: Dictionary = _relic_database[id]
+		if relic["rarity"] == rarity and not has_relic(id):
+			result.append(relic.duplicate(true))
+	return result
 
 
 func get_relic_data(relic_id: String) -> Dictionary:

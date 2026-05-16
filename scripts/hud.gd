@@ -20,6 +20,7 @@ var _combo_label: Label
 var _combo_tween: Tween
 var _low_balls_overlay: ColorRect
 var _low_balls_tween: Tween
+var _modifier_label: Label
 
 const LABEL_COLOR := Color(0.85, 0.85, 0.9)
 const ACCENT_COLOR := Color(0.9, 0.85, 0.3)
@@ -130,6 +131,15 @@ func _build_ui() -> void:
 	_low_balls_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_low_balls_overlay.visible = false
 	add_child(_low_balls_overlay)
+
+	# Roguelike: Active modifiers display
+	_modifier_label = Label.new()
+	_modifier_label.add_theme_font_size_override("font_size", 12)
+	_modifier_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.3))
+	_modifier_label.position = Vector2(15, 895)
+	_modifier_label.size = Vector2(500, 20)
+	_modifier_label.visible = false
+	add_child(_modifier_label)
 
 	# Game Over panel
 	_build_game_over_panel()
@@ -289,3 +299,14 @@ func _update_relic_strip() -> void:
 	for relic in RelicManager.active_relics:
 		icons += relic.get("icon_char", "?") + " "
 	_relic_strip_label.text = icons.strip_edges()
+
+
+func show_modifiers(modifiers: Array) -> void:
+	if modifiers.is_empty():
+		_modifier_label.visible = false
+		return
+	var text := "MODIFIERS: "
+	for mod in modifiers:
+		text += "%s %s  " % [mod.get("icon", ""), mod.get("name", "")]
+	_modifier_label.text = text.strip_edges()
+	_modifier_label.visible = true

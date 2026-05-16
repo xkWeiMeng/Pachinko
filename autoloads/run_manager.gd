@@ -32,6 +32,8 @@ var rng: RandomNumberGenerator
 var run_stats: Dictionary = {}
 
 var _current_objective: RefCounted = null  # FloorObjective
+var last_cleared_node_idx: int = -1
+var run_seed: int = 0
 
 
 func _ready() -> void:
@@ -41,6 +43,7 @@ func _ready() -> void:
 func start_run() -> void:
 	rng = RandomNumberGenerator.new()
 	rng.randomize()
+	run_seed = rng.seed
 
 	current_phase = RunPhase.STARTING
 	current_act = 1
@@ -50,6 +53,7 @@ func start_run() -> void:
 	ball_cap = 150
 	run_score = 0
 	collected_relics.clear()
+	last_cleared_node_idx = -1
 	run_stats = {
 		"total_captures": 0,
 		"total_jackpots": 0,
@@ -99,6 +103,17 @@ func _start_floor(node: Dictionary) -> void:
 	var is_boss: bool = node["type"] == MapGeneratorScript.NodeType.BOSS
 	var config := BoardGeneratorScript.generate(current_floor, current_act, is_elite or is_boss, rng)
 
+	# Apply interest relic: gain 5% of current balls at floor start
+	if is_instance_valid(RelicManager):
+		var interest_rate: float = RelicManager.get_modifier("floor_start_interest", 0.0)
+		if interest_rate > 0.0:
+			var bonus := floori(ball_pool * interest_rate)
+			ball_pool = mini(ball_pool + bonus, ball_cap)
+		# Apply ball_cap_penalty from greedy_heart
+		var cap_penalty: float = RelicManager.get_modifier("ball_cap_penalty", 0.0)
+		if cap_penalty > 0.0:
+			ball_cap = maxi(floori(ball_cap * (1.0 - cap_penalty)), 30)
+
 	# Generate objective
 	_current_objective = FloorObjectiveScript.generate(current_floor, current_act, rng)
 	_current_objective.start()
@@ -121,6 +136,7 @@ func complete_floor() -> void:
 		var node: Dictionary = run_map[current_layer_idx][current_node_idx]
 		node["cleared"] = true
 
+	last_cleared_node_idx = current_node_idx
 	total_floors_cleared += 1
 	run_stats["floors_cleared"] = total_floors_cleared
 
@@ -130,6 +146,12 @@ func complete_floor() -> void:
 	run_stats["total_captures"] += floor_stats.get("captures", 0)
 	run_stats["total_jackpots"] += floor_stats.get("jackpots", 0)
 	ball_pool = mini(GameState.balls_remaining, ball_cap)
+
+	# Perfectionist relic: 0 balls lost in a floor → +15 balls
+	if is_instance_valid(RelicManager):
+		var perfect_bonus: int = RelicManager.get_modifier("perfect_floor_bonus", 0)
+		if perfect_bonus > 0 and GameState.floor_balls_lost == 0:
+			ball_pool = mini(ball_pool + perfect_bonus, ball_cap)
 
 	_set_phase(RunPhase.FLOOR_CLEARED)
 	floor_cleared.emit(current_floor)

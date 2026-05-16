@@ -36,6 +36,30 @@ static func generate_map(rng: RandomNumberGenerator) -> Array[Array]:
 						"cleared": false,
 					})
 
+				# Guarantee: first floor of each act has at least 1 NORMAL node
+				if floor_in_act == 1:
+					var has_normal := false
+					for node in layer:
+						if node["type"] == NodeType.NORMAL:
+							has_normal = true
+							break
+					if not has_normal and not layer.is_empty():
+						layer[0]["type"] = NodeType.NORMAL
+						layer[0]["is_elite"] = false
+
+				# Guarantee: floor before boss (floor_in_act == 4) has REST or SHOP
+				if floor_in_act == 4:
+					var has_rest_or_shop := false
+					for node in layer:
+						if node["type"] == NodeType.REST or node["type"] == NodeType.SHOP:
+							has_rest_or_shop = true
+							break
+					if not has_rest_or_shop and not layer.is_empty():
+						# Convert last node to REST or SHOP
+						var rest_or_shop := NodeType.REST if rng.randf() < 0.5 else NodeType.SHOP
+						layer[layer.size() - 1]["type"] = rest_or_shop
+						layer[layer.size() - 1]["is_elite"] = false
+
 			map.append(layer)
 			floor_num += 1
 

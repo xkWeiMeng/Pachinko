@@ -25,6 +25,8 @@ const FloorObjectiveScript = preload("res://scripts/roguelike/floor_objective.gd
 const ShopScreenScript = preload("res://scripts/roguelike/shop_screen.gd")
 const EventScreenScript = preload("res://scripts/roguelike/event_screen.gd")
 const FloorModifiersScript = preload("res://scripts/roguelike/floor_modifiers.gd")
+const BossBoardsScript = preload("res://scripts/roguelike/boss_boards.gd")
+const MetaScreenScript = preload("res://scripts/roguelike/meta_screen.gd")
 
 const BOARD_W: float = 540.0
 const BOARD_H: float = 960.0
@@ -74,6 +76,15 @@ var _event_screen: CanvasLayer = null
 var _floor_cleared_overlay: CanvasLayer = null
 var _objective_timer: float = 0.0
 var _moving_cup_time: float = 0.0
+var _meta_screen: CanvasLayer = null
+
+# Boss state
+var _boss_type: String = ""
+var _boss_timer: float = 0.0
+var _gate_pins: Array = []
+var _gate_open: bool = false
+var _boss_captures: int = 0
+var _boss_evolution_stage: int = 0
 
 
 func _ready() -> void:
@@ -190,6 +201,9 @@ func _process(delta: float) -> void:
 		_update_moving_cups(delta)
 		# Black hole pull on balls
 		_update_black_holes(delta)
+		# Boss-specific updates
+		if _boss_type != "":
+			_update_boss(delta)
 		return  # No board switching in roguelike mode
 	if Input.is_action_just_pressed("ui_left"):
 		_switch_board(-1)
@@ -208,6 +222,7 @@ func _show_main_menu() -> void:
 	_main_menu.start_game_requested.connect(_on_menu_start)
 	_main_menu.about_requested.connect(_on_menu_about)
 	_main_menu.roguelike_requested.connect(_on_menu_roguelike)
+	_main_menu.stats_requested.connect(_on_menu_stats)
 	add_child(_main_menu)
 
 
@@ -230,6 +245,20 @@ func _on_menu_about() -> void:
 func _on_about_back() -> void:
 	_about_screen.queue_free()
 	_about_screen = null
+	_show_main_menu()
+
+
+func _on_menu_stats() -> void:
+	_main_menu.queue_free()
+	_main_menu = null
+	_meta_screen = MetaScreenScript.new()
+	_meta_screen.back_requested.connect(_on_stats_back)
+	add_child(_meta_screen)
+
+
+func _on_stats_back() -> void:
+	_meta_screen.queue_free()
+	_meta_screen = null
 	_show_main_menu()
 
 
@@ -309,10 +338,22 @@ func setup_roguelike_floor(config: Dictionary, objective: RefCounted) -> void:
 	floor_objective = objective
 	_moving_cup_time = 0.0
 
+	# Initialize boss state
+	_boss_type = config.get("boss_type", "")
+	_boss_timer = 0.0
+	_gate_pins.clear()
+	_gate_open = false
+	_boss_captures = 0
+	_boss_evolution_stage = 0
+
 	# Tear down existing physics and rebuild with roguelike config
 	_tear_down_physics()
 	_build_physics_world()
 	_reconnect_bar_launcher()
+
+	# Boss-specific setup after physics world is built
+	if _boss_type != "" and _physics_world:
+		_setup_boss_mechanics()
 
 	# Apply runtime modifiers (hot pins, moving cups, black holes, wind)
 	var modifiers: Array = config.get("modifiers", [])
@@ -369,6 +410,9 @@ func _on_roguelike_capture(reward: int, is_crit: bool, ball: RigidBody2D) -> voi
 			floor_objective.target_value,
 			floor_objective.get_description(),
 		)
+	# Boss capture tracking
+	if _boss_type != "":
+		_on_boss_capture()
 
 
 func _on_roguelike_ball_lost(_ball: RigidBody2D) -> void:
@@ -413,6 +457,22 @@ func _on_floor_cleared_timer() -> void:
 	if _floor_cleared_overlay:
 		_floor_cleared_overlay.queue_free()
 		_floor_cleared_overlay = null
+
+	# Record floor achievement stats
+	var floor_stats := {
+		"balls_lost": GameState.floor_balls_lost,
+		"clear_time": _objective_timer,
+		"balls_remaining": GameState.balls_remaining,
+	}
+	MetaProgress.check_floor_achievement(floor_stats)
+
+	# Reset boss state
+	_boss_type = ""
+	_boss_timer = 0.0
+	_gate_pins.clear()
+	_gate_open = false
+	_boss_captures = 0
+	_boss_evolution_stage = 0
 
 	# Disconnect roguelike event handlers
 	if EventBus.ball_captured.is_connected(_on_roguelike_capture):
@@ -716,3 +776,178 @@ func _on_ball_captured_effects(_reward: int, is_crit: bool, ball: RigidBody2D) -
 func _on_jackpot_effects() -> void:
 	_particles.emit_burst(Vector2(BOARD_W / 2.0, 400), 40, ParticleSystemScript.jackpot_firework())
 	_camera.shake(4.0, 0.5)
+
+
+# ─── Boss Mechanics ───
+
+func _setup_boss_mechanics() -> void:
+	match _boss_type:
+		"gatekeeper":
+			_setup_gatekeeper()
+		"storm_core":
+			pass  # Wind handled in _update_boss
+		"infinite_machine":
+			pass  # Evolution handled on capture
+		"pachinko_god":
+			pass  # Mutations handled in _update_boss
+
+
+func _setup_gatekeeper() -> void:
+	# Add 2 gate pins at center of the board that open/close
+	var cfg: Dictionary = roguelike_config
+	var origin: Vector2 = cfg.get("pin_origin", Vector2(68.5, 200.0))
+	var h_spacing: float = cfg.get("pin_spacing", 45.0)
+	var v_spacing: float = h_spacing * sqrt(3.0) / 2.0
+	var pin_cols: int = cfg.get("pin_cols", 8)
+	var center_x: float = origin.x + float(pin_cols - 1) * h_spacing / 2.0
+	var gate_y: float = origin.y + 4.0 * v_spacing  # Middle rows
+
+	var gate_pin_left := PinScript.new()
+	gate_pin_left.position = Vector2(center_x - 5.0, gate_y)
+	gate_pin_left.modulate = Color(1.0, 0.2, 0.2)
+	gate_pin_left.add_to_group("gate_pin")
+	_physics_world.add_child(gate_pin_left)
+	_gate_pins.append(gate_pin_left)
+
+	var gate_pin_right := PinScript.new()
+	gate_pin_right.position = Vector2(center_x + 5.0, gate_y)
+	gate_pin_right.modulate = Color(1.0, 0.2, 0.2)
+	gate_pin_right.add_to_group("gate_pin")
+	_physics_world.add_child(gate_pin_right)
+	_gate_pins.append(gate_pin_right)
+
+
+func _update_boss(delta: float) -> void:
+	_boss_timer += delta
+	match _boss_type:
+		"gatekeeper":
+			_update_gatekeeper()
+		"storm_core":
+			_update_storm_core()
+		"pachinko_god":
+			_update_pachinko_god()
+
+
+func _update_gatekeeper() -> void:
+	# Toggle gate every 8 seconds
+	var should_be_open: bool = fmod(_boss_timer, 16.0) >= 8.0
+	if should_be_open != _gate_open:
+		_gate_open = should_be_open
+		if _gate_pins.size() >= 2:
+			var cfg: Dictionary = roguelike_config
+			var origin: Vector2 = cfg.get("pin_origin", Vector2(68.5, 200.0))
+			var h_spacing: float = cfg.get("pin_spacing", 45.0)
+			var pin_cols: int = cfg.get("pin_cols", 8)
+			var center_x: float = origin.x + float(pin_cols - 1) * h_spacing / 2.0
+			if _gate_open:
+				# Move apart
+				_gate_pins[0].position.x = center_x - 30.0
+				_gate_pins[1].position.x = center_x + 30.0
+				_gate_pins[0].modulate = Color(0.2, 1.0, 0.2)
+				_gate_pins[1].modulate = Color(0.2, 1.0, 0.2)
+			else:
+				# Move close together
+				_gate_pins[0].position.x = center_x - 5.0
+				_gate_pins[1].position.x = center_x + 5.0
+				_gate_pins[0].modulate = Color(1.0, 0.2, 0.2)
+				_gate_pins[1].modulate = Color(1.0, 0.2, 0.2)
+
+
+func _update_storm_core() -> void:
+	# Oscillating wind force
+	GameState.wind_force = sin(_boss_timer * 0.4) * 200.0
+
+
+func _update_pachinko_god() -> void:
+	# Every 15s, apply a random physics mutation
+	var interval := 15.0
+	var prev_count := floori((_boss_timer - get_process_delta_time()) / interval)
+	var curr_count := floori(_boss_timer / interval)
+	if curr_count > prev_count and curr_count > 0:
+		_apply_random_mutation()
+
+
+func _apply_random_mutation() -> void:
+	var mutation := randi() % 4
+	match mutation:
+		0:
+			# Gravity flip: invert gravity on active balls
+			var balls := get_tree().get_nodes_in_group("ball")
+			for ball in balls:
+				if is_instance_valid(ball) and ball is RigidBody2D:
+					ball.gravity_scale = -ball.gravity_scale
+		1:
+			# Bounce ×2: increase bounce on active balls
+			var balls := get_tree().get_nodes_in_group("ball")
+			for ball in balls:
+				if is_instance_valid(ball) and ball is RigidBody2D:
+					var mat := ball.physics_material_override
+					if mat:
+						mat.bounce = clampf(mat.bounce * 2.0, 0.0, 1.0)
+		2:
+			# Friction ×3 on active balls
+			var balls := get_tree().get_nodes_in_group("ball")
+			for ball in balls:
+				if is_instance_valid(ball) and ball is RigidBody2D:
+					var mat := ball.physics_material_override
+					if mat:
+						mat.friction = clampf(mat.friction * 3.0, 0.0, 1.0)
+		3:
+			# Wind reversal
+			GameState.wind_force = -GameState.wind_force if GameState.wind_force != 0.0 else 150.0
+
+
+func _on_boss_capture() -> void:
+	_boss_captures += 1
+	if _boss_type == "infinite_machine":
+		_check_infinite_machine_evolution()
+
+
+func _check_infinite_machine_evolution() -> void:
+	var stages: Array = roguelike_config.get("evolution_stages", [])
+	if _boss_evolution_stage >= stages.size():
+		return
+
+	var next_stage: Dictionary = stages[_boss_evolution_stage]
+	if _boss_captures >= next_stage.get("captures", 999):
+		_boss_evolution_stage += 1
+		_evolve_pin_grid(next_stage)
+
+
+func _evolve_pin_grid(stage: Dictionary) -> void:
+	# Only rebuild the pin grid, keep cups/drain/launcher intact
+	if not _physics_world:
+		return
+
+	# Remove existing pin_grid
+	if _pin_grid and is_instance_valid(_pin_grid):
+		_physics_world.remove_child(_pin_grid)
+		_pin_grid.queue_free()
+		_pin_grid = null
+
+	var new_rows: int = stage.get("pin_rows", 12)
+	var new_cols: int = stage.get("pin_cols", 10)
+	var spacing_delta: float = stage.get("spacing_delta", 0.0)
+	var base_spacing: float = roguelike_config.get("pin_spacing", 45.0)
+	var new_spacing: float = maxf(base_spacing + spacing_delta, 30.0)
+
+	var grid_span := float(new_cols - 1) * new_spacing
+	var pin_origin_x := PLAY_CX - grid_span / 2.0
+
+	_pin_grid = PinGridScript.new()
+	_pin_grid.rows = new_rows
+	_pin_grid.cols = new_cols
+	_pin_grid.h_spacing = new_spacing
+	_pin_grid.position = Vector2(pin_origin_x, 200.0)
+	_physics_world.add_child(_pin_grid)
+
+	# Apply hot pins if this stage requires it
+	if stage.get("hot_pins", false) and RunManager.rng:
+		# Wait a frame for pin_grid to generate its children
+		call_deferred("_apply_hot_pins_to_grid")
+
+
+func _apply_hot_pins_to_grid() -> void:
+	if _physics_world and RunManager.rng:
+		var mod_array: Array[Dictionary] = [{"id": "hot_pins"}]
+		FloorModifiersScript.apply_runtime_modifiers(mod_array, _physics_world, RunManager.rng)

@@ -23,6 +23,7 @@ GameState="*res://autoloads/game_state.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
 RelicManager="*res://autoloads/relic_manager.gd"
 RunManager="*res://autoloads/run_manager.gd"
+MetaProgress="*res://autoloads/meta_progress.gd"
 
 [gui]
 

@@ -16,6 +16,7 @@ enum RunPhase {
 const BoardGeneratorScript = preload("res://scripts/roguelike/board_generator.gd")
 const MapGeneratorScript = preload("res://scripts/roguelike/map_generator.gd")
 const FloorObjectiveScript = preload("res://scripts/roguelike/floor_objective.gd")
+const BossBoardsScript = preload("res://scripts/roguelike/boss_boards.gd")
 
 var current_phase: RunPhase = RunPhase.NONE
 var current_act: int = 1
@@ -101,7 +102,12 @@ func select_map_node(layer_idx: int, node_idx: int) -> void:
 func _start_floor(node: Dictionary) -> void:
 	var is_elite: bool = node.get("is_elite", false)
 	var is_boss: bool = node["type"] == MapGeneratorScript.NodeType.BOSS
-	var config := BoardGeneratorScript.generate(current_floor, current_act, is_elite or is_boss, rng)
+	var config: Dictionary
+
+	if is_boss:
+		config = BossBoardsScript.get_boss_config(current_floor, current_act, rng)
+	else:
+		config = BoardGeneratorScript.generate(current_floor, current_act, is_elite, rng)
 
 	# Apply interest relic: gain 5% of current balls at floor start
 	if is_instance_valid(RelicManager):
@@ -114,8 +120,19 @@ func _start_floor(node: Dictionary) -> void:
 		if cap_penalty > 0.0:
 			ball_cap = maxi(floori(ball_cap * (1.0 - cap_penalty)), 30)
 
-	# Generate objective
-	_current_objective = FloorObjectiveScript.generate(current_floor, current_act, rng)
+	# Generate objective: boss floors use config-defined objective
+	if is_boss and config.has("objective_type"):
+		_current_objective = FloorObjectiveScript.new()
+		match config["objective_type"]:
+			"TARGET_SCORE":
+				_current_objective.type = FloorObjectiveScript.Type.TARGET_SCORE
+			"CAPTURES":
+				_current_objective.type = FloorObjectiveScript.Type.CAPTURES
+			_:
+				_current_objective.type = FloorObjectiveScript.Type.TARGET_SCORE
+		_current_objective.target_value = config.get("objective_target", 1000)
+	else:
+		_current_objective = FloorObjectiveScript.generate(current_floor, current_act, rng)
 	_current_objective.start()
 
 	if is_boss:
@@ -184,6 +201,9 @@ func end_run(won: bool) -> void:
 		_set_phase(RunPhase.RUN_WON)
 	else:
 		_set_phase(RunPhase.RUN_LOST)
+
+	# Record meta-progression
+	MetaProgress.record_run_end(won, run_stats)
 
 	run_ended.emit(won, run_stats)
 	EventBus.run_ended.emit(won, run_stats)
